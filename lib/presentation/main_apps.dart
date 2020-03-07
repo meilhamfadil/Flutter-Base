@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterfirebase/presentation/auth/auth_bloc.dart';
@@ -11,9 +14,15 @@ class MainApps extends StatefulWidget {
 }
 
 class _MainApps extends State<MainApps> {
-  final AuthBloc auth = AuthBloc();
+  bool _isVisiblePassword = false;
+  bool _isRequesting = false;
+  GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  AuthBloc auth = AuthBloc();
 
-  bool _passwordShow = false;
+  _updatePasswordVisibility() =>
+      setState(() => _isVisiblePassword = !_isVisiblePassword);
+
+  _updateRequestStatus(bool value) => setState(() => _isRequesting = value);
 
   @override
   Widget build(BuildContext context) {
@@ -22,9 +31,28 @@ class _MainApps extends State<MainApps> {
         title: Text(AppString.appName),
         backgroundColor: AppColor.primary,
       ),
-      body: Form(
-        child: _form(),
-        autovalidate: true,
+      body: StreamBuilder(
+        stream: auth.currentUser,
+        builder: (BuildContext context, AsyncSnapshot<FirebaseUser> snapshot) {
+          if (snapshot.data == null)
+            return Form(
+              key: _formKey,
+              child: _form(),
+            );
+
+          return Center(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text("Email Anda :"),
+                Text(snapshot.data.email),
+                Text("ID anda : "),
+                Text(snapshot.data.uid)
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -34,50 +62,80 @@ class _MainApps extends State<MainApps> {
         child: Column(
           children: <Widget>[
             TextFormField(
+              controller: auth.tecEmail,
+              keyboardType: TextInputType.emailAddress,
               decoration: AppStyles.formLogin.copyWith(
                 hintText: "Email",
               ),
-              keyboardType: TextInputType.emailAddress,
-              validator: (value) =>
-                  value.validateEmail().nullOrValue<String>("Email Not Valid"),
+              validator: (value) => value
+                  .validation()
+                  .required(message: "Email Required")
+                  .email(message: "Email Not Valid")
+                  .validate(),
             ),
             Container(height: 10),
             TextFormField(
+              controller: auth.texPassword,
+              keyboardType: TextInputType.visiblePassword,
+              obscureText: !_isVisiblePassword,
+              validator: (value) => value
+                  .validation()
+                  .required(message: "Password Required")
+                  .minLength(
+                    length: 6,
+                    message: "Password At Least 6 Character",
+                  )
+                  .validate(),
               decoration: AppStyles.formLogin.copyWith(
                   hintText: "Password",
                   suffixIcon: IconButton(
                     icon: Icon(
                       Icons.remove_red_eye,
-                      color: !_passwordShow ? AppColor.dark : AppColor.primary,
+                      color:
+                          _isVisiblePassword ? AppColor.primary : AppColor.dark,
                     ),
-                    onPressed: updateShowPasswordState,
+                    onPressed: _updatePasswordVisibility,
                   )),
-              obscureText: !_passwordShow,
-              keyboardType: TextInputType.visiblePassword,
+            ),
+            StreamBuilder(
+              stream: auth.loginMessage,
+              builder: (BuildContext context, AsyncSnapshot<String> snapshot) {
+                if (snapshot.hasData)
+                  return Container(
+                    margin: EdgeInsets.only(top: 10),
+                    child: Text(snapshot.data),
+                  );
+                return Container();
+              },
             ),
             Container(height: 10),
             Container(
               width: double.infinity,
-              child: FlatButton(
-                child: Text("Login"),
-                color: AppColor.primary,
-                textColor: AppColor.white,
-                onPressed: () {},
-              ),
+              child: loginButton(),
             ),
           ],
         ),
       );
 
-  void updateShowPasswordState() {
-    setState(() {
-      _passwordShow = !_passwordShow;
-    });
+  FlatButton loginButton() {
+    return FlatButton(
+      child: (!_isRequesting) ? Text("Login") : AppWidget.smallLoading,
+      color: AppColor.primary,
+      disabledColor: AppColor.secondary,
+      textColor: AppColor.white,
+      onPressed: onSubmit(),
+    );
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-    auth.dispose();
+  Function onSubmit() {
+    if (_isRequesting) return null;
+
+    return () async {
+      if (_formKey.currentState.validate()) {
+        _updateRequestStatus(true);
+        await auth.signIn();
+        _updateRequestStatus(false);
+      }
+    };
   }
 }

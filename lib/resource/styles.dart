@@ -22,3 +22,14 @@ class AppStyles {
     ),
   );
 }
+
+class AppWidget {
+  static SizedBox smallLoading = SizedBox(
+    width: 15,
+    height: 15,
+    child: CircularProgressIndicator(
+      strokeWidth: 2,
+      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+    ),
+  );
+}
